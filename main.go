@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"github.com/google/uuid"
 	"io"
@@ -74,12 +75,16 @@ func CreateApiKey(xReferenceID string) (int, string, error) {
 	return res.StatusCode, string(body), nil
 }
 
-func CreateAccessToken(apiKey string) (int, string, error) {
-	url := "https://sandbox.momodeveloper.mtn.com/v1_0/token"
+func CreateAccessToken(apiUserId, apiKey string) (int, string, error) {
+	url := "https://sandbox.momodeveloper.mtn.com/collection/token/"
 	method := "POST"
 
 	// Set the payload with the required parameters to get an access token
 	payload := strings.NewReader("grant_type=client_credentials")
+
+	// Combine apiUserId and apiKey for Basic Auth
+	authValue := fmt.Sprintf("%s:%s", apiUserId, apiKey)
+	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authValue))
 
 	client := &http.Client{}
 	req, err := http.NewRequest(method, url, payload)
@@ -87,10 +92,10 @@ func CreateAccessToken(apiKey string) (int, string, error) {
 		return 0, "", fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Add required headers, including the apiKey as authorization
+	// Add required headers, including the base64 encoded apiUserId:apiKey as Basic authorization
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Add("Ocp-Apim-Subscription-Key", "c91b4295001440efb7d286f452575de7")
-	req.Header.Add("Authorization", "Bearer "+apiKey)
+	req.Header.Add("Authorization", "Basic "+encodedAuth)
 
 	// Execute the request
 	res, err := client.Do(req)
@@ -138,17 +143,18 @@ func main() {
 
 		fmt.Printf("API Key Created\nStatus: %d\nResponse: %s\n", keyStatus, keyResponse)
 
+		fmt.Printf("The key was generated or created\n")
+
 		// Step 3: Create Access Token using the API Key
-		if keyStatus == http.StatusOK {
+		if keyStatus == 201 {
 			// Extract the API key from the keyResponse (you would need to parse the response body here)
 			// Assuming `keyResponse` contains the API key, for now, we can just use it as a string.
 			// You might need to parse JSON response to extract the actual key.
-
+			fmt.Print("moving to create the CreateAccessToken")
 			// Here we just pass it directly assuming it’s in the response.
 			apiKey := keyResponse // Adjust this to extract the actual API key from the response body
-
 			// Step 4: Create Access Token
-			tokenStatus, tokenResponse, err := CreateAccessToken(apiKey)
+			tokenStatus, tokenResponse, err := CreateAccessToken(xReferenceID, apiKey)
 			if err != nil {
 				fmt.Printf("Error creating access token: %v\n", err)
 				return
